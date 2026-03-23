@@ -1,8 +1,6 @@
 
 # Math 250
 
-<!-- badges: start -->
-<!-- badges: end -->
 
-The goal of Math 250 is to ...
+The goal of Math 250 is to upload my work for my Statistical programming class.
 
