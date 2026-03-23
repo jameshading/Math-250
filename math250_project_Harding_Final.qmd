@@ -1,0 +1,233 @@
+---
+title: "Fear on a Budget: How Production Philosophy Shapes Horror Film Profitability"
+author: Wezizwe Harding
+format: html
+embed-resources: true
+code-fold: true
+execute:
+  enabled: true
+  cache: true
+  freeze: auto
+  warning: false
+  message: false
+---
+
+#### Setup
+
+```{r}
+#| label: setup
+#| include: true
+#| cache: true
+#| message: false
+#| output: false
+
+library(tidyverse)
+library(gt)
+
+horror_movies <- read.csv("horror_movies.csv")
+```
+
+---
+
+# Introduction
+::: {.callout-note}
+
+## What makes a horror film profitable?
+Some might say: "Spend more and earn more." Let's find out if this is really true.
+::: 
+
+
+This project explores how **budget level** and **language market** interact to shape horror films' profitability, and whether cultural production philosophy offers a convincing explanation for what the data reveals.
+
+Hollywood horror typically follows a franchise model: high budgets, sequels and remakes.^[For more details, see the website:[Blog link](https://www.linkedin.com/pulse/how-low-budget-horror-filmmaking-could-shape-future-theatrical-jaran-z2e3e/).]
+
+However, Japanese horror (*J-horror*) has historically favoured low-budget, atmospherically driven filmmaking rooted in Shinto traditions
+where the threat cannot be defeated but only endured.^[For more details, see the website:[Blog link](http://www.midnighteye.com/features/the-death-of-j-horror/).]
+
+The dataset used here is Tanya Shapiro's horror movie database^[For more details, see the project website:[Project link](https://github.com/rfordatascience/tidytuesday/blob/master/data/2022/2022-11-01/readme.md).], featured in the "2022 Tidy Tuesday challenge," containing over 32,000 horror films with the following relevant variables: 
+
+- budget, revenue, language, popularity, and vote averages.
+
+```{r}
+variables <- c("budget", "revenue", "language", "popularity", "vote averages")
+
+descriptions <- c("float", "float", "string", "float", "float")
+variables_tbl <- data.frame(
+  attribute = variables,
+  description = descriptions
+)
+
+gt(variables_tbl)
+
+```
+
+---
+
+## Data Preparation
+
+```{r}
+#| label: data-prep
+#| output: false
+
+# Keep only films where both budget and revenue are recorded and non-zero
+df_clean <- horror_movies %>%
+  filter(budget > 0, revenue > 0) %>%
+  mutate(
+    profitability = (revenue - budget) / budget,
+    budget_cat = case_when(
+      budget < 1000000                         ~ "Low (<$1M)",
+      budget >= 1000000 & budget <= 10000000   ~ "Medium ($1–10M)",
+      budget > 10000000                        ~ "High (>$10M)"
+    ),
+    budget_cat = factor(budget_cat,
+                        levels = c("Low (<$1M)", "Medium ($1–10M)", "High (>$10M)"))
+  ) %>%
+  filter(!is.na(profitability), !is.infinite(profitability))
+
+glimpse(df_clean)
+```
+
+---
+
+### Does Budget Level Predict Profitability?
+
+```{r}
+#| label: fig-budget-profit
+#| fig-alt: >
+#|   A bar chart showing mean profitability for three budget categories of horror films.
+#|   Low-budget films (under $1M) have by far the highest mean profitability at around 85x
+#|   the budget. Medium-budget films ($1M to $10M) average around 4.5x, and high-budget
+#|   films (over $10M) average around 1.9x. The relationship is strongly negative,
+#|   meaning smaller budgets return proportionally far more revenue.
+
+df_budget <- df_clean %>%
+  group_by(budget_cat) %>%
+  summarise(
+    mean_profitability = mean(profitability),
+    n = n()
+  )
+
+ggplot(df_budget, aes(x = budget_cat, y = mean_profitability, fill = budget_cat)) +
+  geom_col(show.legend = FALSE) +
+  labs(
+    title    = "Low-Budget Horror Films Are Far More Profitable",
+    subtitle = "Mean profitability = (revenue − budget) / budget",
+    x        = "Budget Category",
+    y        = "Mean Profitability (× budget)",
+    caption  = "Source: Tanya Shapiro's Horror Movie Database (Tidy Tuesday 2022)"
+  ) +
+  scale_fill_brewer(palette = "Dark2") +
+  theme_minimal()
+```
+
+Films budgeted under \$1M return an average of **85× their budget**,
+compared to **4.5× for medium-budget** films and 1.9× for high-budget productions.[^3]
+
+If low-budget films are mechanically more profitable, do markets that produce more low-budget films, like Japan, benefit simply by operating in that tier? 
+
+The next section examines whether language market adds any explanatory power beyond budget alone.
+
+---
+
+### Does Language Market Matter Too?
+
+```{r}
+#| label: fig-lang-budget
+#| fig-alt: >
+#|   A grouped bar chart showing the proportion of horror films in each budget category
+#|   (Low under $1M, Medium $1M to $10M, High over $10M) for English, French, Japanese,
+#|   Korean, and Spanish language films. English films are spread relatively evenly across
+#|   all three tiers. Japanese and Spanish films are concentrated in the low and medium
+#|   categories, with very few high-budget productions. Korean films are predominantly
+#|   in the medium and high tiers.
+
+df_lang <- df_clean %>%
+  filter(original_language %in% c("en", "ja", "es", "fr", "ko")) %>%
+  mutate(
+    language_label = recode(original_language,
+      en = "English", ja = "Japanese", es = "Spanish",
+      fr = "French",  ko = "Korean"
+    )
+  )
+
+budget_dist <- df_lang %>%
+  count(language_label, budget_cat) %>%
+  group_by(language_label) %>%
+  mutate(proportion = n / sum(n)) %>%
+  ungroup()
+
+ggplot(budget_dist, aes(x = language_label, y = proportion, fill = budget_cat)) +
+  geom_col(position = "dodge") +
+  
+  scale_fill_brewer(palette = "Dark2", name = "Budget Category") +
+  labs(
+    title    = "Budget Distribution Differs Across Language Markets",
+    subtitle = "Proportion of films in each budget tier | films with budget & revenue recorded",
+    x        = NULL,
+    y        = "Proportion of Films",
+    caption  = "Source: Tanya Shapiro's Horror Movie Database (Tidy Tuesday 2022)"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+The budget distributions differ meaningfully across markets. English productions are spread relatively evenly across all tiers though have a significantly higher proportion of high budget films, a footprint of Hollywood's franchise-oriented industry. 
+
+Japanese and Spanish films cluster in the low and medium categories, with very few high-budget productions. Korean horror is a notable exception, as it leans toward medium and high budgets. This matters because it begins to connect the cultural production argument to the data.
+
+If J-horror’s low-budget style stems from a deliberate creative choice rather than limited spending, we would expect it to endure over time and continue to receive high audience ratings. 
+
+The table below looks at this idea:
+
+### Profitability and Audience Reception by Language
+
+```{r}
+#| label: tbl-lang-summary
+
+df_lang %>%
+  group_by(language_label) %>%
+  summarise(
+    `Films` = n(),
+    `Mean Profitability` = round(mean(profitability), 2),
+    `Median Profitability` = round(median(profitability), 2),
+    `Mean Vote Average` = round(mean(vote_average, na.rm = TRUE), 2),
+    `Mean Popularity` = round(mean(popularity, na.rm = TRUE), 2),
+    `Mean Budget (USD)` = round(mean(budget), 0),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(`Mean Profitability`)) %>%
+  gt() %>%
+  tab_header(
+    title    = "Horror Film Performance by Language Market",
+    subtitle = "Restricted to films with both budget and revenue recorded"
+  ) %>%
+  
+  tab_caption("Source: Tanya Shapiro's Horror Movie Database (Tidy Tuesday 2022)")
+```
+
+#### Table Analysis
+
+1. Japanese films have the highest mean profitability
+(around 286×) despite an average budget of approximately \$6.5M  higher than Spanish films (\$2.4M) and comparable to French (\$5.9M). Budget concentration in lower tiers is part of the story.
+
+2. Japanese films do not have the highest vote average or popularity in this subset French films lead on votes, English on popularity. Profitability here is genuinely distinct from audience acclaim or reach.
+
+---
+
+# Discussion
+
+The data supports a coherent story. Low-budget horror films are more profitable as a ratio of their production cost. However, budget alone does not explain everything. J-horror produces profit well above what its budget distribution would predict compared to films at similar budget levels, suggesting something specific to how those films are made and received.
+
+The cultural production argument offers a plausible explanation. Hollywood's franchise model inflates budgets to make sequels and pursue heavy marketing (with global distribution costs baked in). J-horror's
+tradition of craft-led, low-cost storytelling produces films that can return astounding multiples on modest investments.
+
+It is important to be honest about what the data cannot tell us. The sample of non-English films with both budget and revenue recorded is small (24 Japanese, 25 Spanish), so individual outliers carry significant weight in the means. This is an exploratory project: the patterns are suggestive and worth investigating further, not definitive.
+
+---
+
+# Conclusion
+
+Horror's most financially efficient films tend to be its most modestly made. The data from over 32,000 horror films consistently shows that low-budget productions return higher multiples on their investment, and the language markets most associated with low-budget filmmaking 
+particularly Japanese, lead on profitability. The cultural production philosophy argument provides a useful lens for why this might be: industries oriented toward craft and restraint and efficiency(ikigai) rather than franchise scale generate different economic outcomes, even if the data alone cannot prove causation. 
+
+The scariest thing in this dataset may simply be what **Hollywood splurges...**
