@@ -15,3 +15,10 @@ create_github_token()
 
 gitcreds::gitcreds_set()
 
+
+#put a project into Github
+use_github()
+
+# create a README.md
+
+use_readme_md()
